@@ -270,10 +270,19 @@ function importDB(){
   const inp=document.createElement('input');
   inp.type='file'; inp.accept='.json';
   inp.onchange=async e=>{
-    try{
-      db=JSON.parse(await e.target.files[0].text());
-      await save(); updateUI(); toast('Import erfolgreich');
-    }catch{toast('Ungültige Datei',true)}
+    const file=e.target.files[0]; if(!file) return;
+    showConfirm(
+      'Journal importieren',
+      `"${file.name}" importieren? Alle aktuellen Daten (${db?db.trades.length:0} Trades) werden überschrieben. Nicht rückgängig!`,
+      async()=>{
+        try{
+          db=JSON.parse(await file.text());
+          if(!db.settings) db.settings=DEFAULT_DB.settings;
+          if(!db.trades) db.trades=[];
+          await save(); updateUI(); toast('Import erfolgreich');
+        }catch{toast('Ungültige JSON-Datei',true)}
+      }
+    );
   };
   inp.click();
 }
@@ -396,6 +405,7 @@ function perfByField(trades,fn){
 }
 
 // ── FORMATIERUNG ──────────────────────────────────────
+function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function fm(n,d=2){if(n===null||n===undefined||isNaN(n))return'–';return n.toFixed(d).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.')}
 function fmpct(n){if(n===null||n===undefined||isNaN(n))return'–';return n.toFixed(1).replace('.',',')+' %'}
 function ocClass(o){return o==='Wintrade'?'oc-win':o==='Kostentrade'?'oc-loss':o==='Breakeven'?'oc-be':'oc-nt'}
@@ -750,12 +760,12 @@ function viewTrade(id){
       ${row('Strategie',t.strategie||'–')} ${row('Einstieg',t.einstieg||'–')}
       ${row('Bewertung',t.bewertung?t.bewertung+'/10':'–')} ${row('Gefühl',t.gefuehl||'–')}
     </div>
-    ${t.tvLink?`<div style="margin-bottom:10px"><a href="${t.tvLink}" target="_blank">TradingView öffnen ↗</a></div>`:''}
-    ${t.ausloser?`<div style="margin-bottom:10px"><strong>Auslöser:</strong><div class="text-muted" style="margin-top:3px">${t.ausloser}</div></div>`:''}
-    ${t.pros?`<div style="margin-bottom:10px"><strong class="text-win">Pros:</strong><div class="text-muted" style="margin-top:3px">${t.pros}</div></div>`:''}
-    ${t.cons?`<div style="margin-bottom:10px"><strong class="text-loss">Cons:</strong><div class="text-muted" style="margin-top:3px">${t.cons}</div></div>`:''}
-    ${t.reflexion?`<div style="margin-bottom:10px"><strong>Reflexion:</strong><div class="text-muted" style="margin-top:3px">${t.reflexion}</div></div>`:''}
-    ${t.lerneffekt?`<div style="margin-bottom:10px"><strong>Lerneffekt:</strong><div class="text-muted" style="margin-top:3px">${t.lerneffekt}</div></div>`:''}
+    ${t.tvLink?`<div style="margin-bottom:10px"><a href="${esc(t.tvLink)}" target="_blank" rel="noopener">TradingView öffnen ↗</a></div>`:''}
+    ${t.ausloser?`<div style="margin-bottom:10px"><strong>Auslöser:</strong><div class="text-muted" style="margin-top:3px;white-space:pre-wrap">${esc(t.ausloser)}</div></div>`:''}
+    ${t.pros?`<div style="margin-bottom:10px"><strong class="text-win">Pros:</strong><div class="text-muted" style="margin-top:3px;white-space:pre-wrap">${esc(t.pros)}</div></div>`:''}
+    ${t.cons?`<div style="margin-bottom:10px"><strong class="text-loss">Cons:</strong><div class="text-muted" style="margin-top:3px;white-space:pre-wrap">${esc(t.cons)}</div></div>`:''}
+    ${t.reflexion?`<div style="margin-bottom:10px"><strong>Reflexion:</strong><div class="text-muted" style="margin-top:3px;white-space:pre-wrap">${esc(t.reflexion)}</div></div>`:''}
+    ${t.lerneffekt?`<div style="margin-bottom:10px"><strong>Lerneffekt:</strong><div class="text-muted" style="margin-top:3px;white-space:pre-wrap">${esc(t.lerneffekt)}</div></div>`:''}
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="document.getElementById('detailOverlay').classList.remove('open')">Schließen</button>
       <button class="btn btn-primary" onclick="document.getElementById('detailOverlay').classList.remove('open');editTrade(${t.id})">Bearbeiten</button>
@@ -797,7 +807,7 @@ function buildSettings(){
   <div class="flex" style="flex-wrap:wrap;gap:8px">
     <button class="btn btn-secondary" onclick="exportDB()">Export JSON</button>
     <button class="btn btn-secondary" onclick="importDB()">Import JSON</button>
-    <button class="btn btn-danger" onclick="showConfirm('Alle Trades löschen','Wirklich ALLE ${db.trades.length} Trades löschen? Nicht rückgängig!',resetTrades)">Alle Trades löschen</button>
+    <button class="btn btn-danger" onclick="showConfirm('Alle Trades löschen','Wirklich ALLE '+db.trades.length+' Trades löschen? Diese Aktion ist nicht rückgängig machbar!',resetTrades)">Alle Trades löschen</button>
   </div>
   <div style="margin-top:10px;font-size:12px;color:var(--muted)">${db.trades.length} Trades · ${fileHandle?fileHandle.name:'unbekannte Datei'}</div>
 </div>`;
