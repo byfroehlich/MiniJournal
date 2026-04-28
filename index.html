@@ -196,7 +196,151 @@ textarea{resize:vertical;min-height:68px}
 <div id="toast"></div>
 
 <script>
-// BLOCK 2: State + File System (wird in nächstem Block ergänzt)
+// ── STATE ──────────────────────────────────────────────
+let db = null;
+let fileHandle = null;
+let currentView = 'dashboard';
+let editId = null;
+let jFilter = {outcome:'',session:'',asset:'',richtung:''};
+
+const DEFAULT_DB = {
+  version:'1.0',
+  settings:{
+    startKontostand:50000,
+    sessions:['Asia','London','NY AM','NY PM'],
+    assets:['ES','MES','NQ','MNQ','CL','MCL','GC','MGC','6E','M6E'],
+    strategien:['Broken Model','Brot und Butter','DR / IDR','Korrelationen','Königsweg','Opening Range Gap','Retirement Setup','Smart Money','Wochengap'],
+    einstiegselemente:['Algoblock','Breaker Block','CISDO','Eingebundene Lücke','Liqui-Level','Lücke','Mitigation Block','VIB','Wick'],
+    richtungen:['Long','Short'],
+    outcomes:['Wintrade','Kostentrade','Breakeven','No Trade'],
+    gefuehle:['Sehr gut','Gut','Neutral','Schlecht','FOMO','Überzeugend','Unsicher','Diszipliniert']
+  },
+  trades:[]
+};
+
+// ── FILE SYSTEM ────────────────────────────────────────
+async function openJournal(){
+  if(!window.showOpenFilePicker){return toast('Bitte Chrome verwenden (File System API)',true)}
+  try{
+    [fileHandle]=await window.showOpenFilePicker({
+      types:[{description:'Journal',accept:{'application/json':['.json']}}]
+    });
+    const file=await fileHandle.getFile();
+    db=JSON.parse(await file.text());
+    if(!db.settings) db.settings=DEFAULT_DB.settings;
+    if(!db.trades) db.trades=[];
+    updateUI();
+    toast('Journal geöffnet');
+  }catch(e){if(e.name!=='AbortError') toast('Fehler: '+e.message,true)}
+}
+
+async function newJournal(){
+  if(!window.showSaveFilePicker){return toast('Bitte Chrome verwenden (File System API)',true)}
+  try{
+    fileHandle=await window.showSaveFilePicker({
+      suggestedName:'journal.json',
+      types:[{description:'Journal',accept:{'application/json':['.json']}}]
+    });
+    db=JSON.parse(JSON.stringify(DEFAULT_DB));
+    await save();
+    updateUI();
+    toast('Neues Journal erstellt');
+  }catch(e){if(e.name!=='AbortError') toast('Fehler: '+e.message,true)}
+}
+
+async function save(){
+  if(!fileHandle||!db) return;
+  try{
+    const w=await fileHandle.createWritable();
+    await w.write(JSON.stringify(db,null,2));
+    await w.close();
+  }catch(e){toast('Speichern fehlgeschlagen: '+e.message,true)}
+}
+
+function exportDB(){
+  if(!db) return;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(db,null,2)],{type:'application/json'}));
+  a.download='journal-export.json';
+  a.click();
+  toast('Exportiert');
+}
+
+function importDB(){
+  const inp=document.createElement('input');
+  inp.type='file'; inp.accept='.json';
+  inp.onchange=async e=>{
+    try{
+      db=JSON.parse(await e.target.files[0].text());
+      await save(); updateUI(); toast('Import erfolgreich');
+    }catch{toast('Ungültige Datei',true)}
+  };
+  inp.click();
+}
+
+// ── UI HELPERS ─────────────────────────────────────────
+function toast(msg,err=false){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='show'+(err?' err':'');
+  clearTimeout(t._t); t._t=setTimeout(()=>t.className='',2800);
+}
+
+function showConfirm(title,text,cb){
+  document.getElementById('confirmTitle').textContent=title;
+  document.getElementById('confirmText').textContent=text;
+  document.getElementById('confirmOk').onclick=()=>{closeConfirm();cb()};
+  document.getElementById('confirmOverlay').classList.add('open');
+}
+function closeConfirm(){document.getElementById('confirmOverlay').classList.remove('open')}
+
+function updateUI(){
+  if(!db) return renderWelcome();
+  document.getElementById('fileStatus').textContent=
+    (fileHandle?fileHandle.name:'journal.json')+' · '+db.trades.length+' Trades';
+  renderNav();
+  showView(currentView);
+}
+
+function renderNav(){
+  const tabs=[['dashboard','Dashboard'],['trade','Neuer Trade'],['journal','Journal'],['settings','Einstellungen']];
+  document.getElementById('navTabs').innerHTML=tabs.map(([v,l])=>
+    `<button class="nav-tab${currentView===v?' active':''}" onclick="showView('${v}')">${l}</button>`
+  ).join('');
+}
+
+function showView(v){
+  if(!db) return;
+  currentView=v; renderNav();
+  const m=document.getElementById('main');
+  if(v==='dashboard') m.innerHTML=buildDashboard();
+  else if(v==='trade')  m.innerHTML=buildForm();
+  else if(v==='journal') m.innerHTML=buildJournal();
+  else if(v==='settings') m.innerHTML=buildSettings();
+  if(v==='dashboard') initDashboard();
+  if(v==='trade'&&editId) prefill(db.trades.find(t=>t.id===editId));
+}
+
+function renderWelcome(){
+  document.getElementById('navTabs').innerHTML='';
+  document.getElementById('main').innerHTML=`
+    <div id="welcome">
+      <h2>MiniJournal</h2>
+      <p>Dein Trading Journal — komplett offline, kein Server, keine Cloud.</p>
+      <div class="welcome-btns">
+        <button class="btn btn-secondary" onclick="openJournal()">Journal öffnen</button>
+        <button class="btn btn-primary" onclick="newJournal()">Neues Journal</button>
+      </div>
+    </div>`;
+}
+
+// close overlays on bg click
+document.getElementById('detailOverlay').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open')});
+document.getElementById('confirmOverlay').addEventListener('click',function(e){if(e.target===this)closeConfirm()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.overlay.open').forEach(o=>o.classList.remove('open'))}});
+
+window.addEventListener('load',renderWelcome);
+
+// ── BLOCK 3: Berechnungen + Charts (folgt) ─────────────
 </script>
 </body>
 </html>
