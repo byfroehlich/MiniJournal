@@ -470,7 +470,196 @@ function drawBars(id,values,labels){
   });
 }
 
-// ── BLOCK 4: Views (folgt) ────────────────────────────
+// ── DASHBOARD ─────────────────────────────────────────
+function buildDashboard(){
+  const k=calcKPIs(db.trades,db.settings.startKontostand);
+  const none=db.trades.length===0;
+  const kc=(l,v,c)=>`<div class="kpi-card"><div class="kpi-label">${l}</div><div class="kpi-value ${c}">${v}</div></div>`;
+  return`<div class="flex" style="margin-bottom:16px"><div class="section-title">Dashboard</div><span class="text-muted" style="margin-left:8px;font-size:13px">${k.count} Trades</span></div>
+<div class="kpi-grid">
+  ${kc('Gesamte P/L',(k.totalPL>=0?'+':'')+fm(k.totalPL)+' $',k.totalPL>0?'pos':k.totalPL<0?'neg':'neu')}
+  ${kc('Kontostand',fm(k.kontostand)+' $',k.kontostand>=db.settings.startKontostand?'pos':'neg')}
+  ${kc('Winrate',fmpct(k.winrate),k.winrate===null?'neu':k.winrate>=50?'pos':'neg')}
+  ${kc('Profitfaktor',k.profitfaktor===null?'–':k.profitfaktor===Infinity?'∞':fm(k.profitfaktor),k.profitfaktor===null?'neu':k.profitfaktor>=1?'pos':'neg')}
+  ${kc('Gesamt-R',fm(k.totalR)+' R',k.totalR>=0?'pos':'neg')}
+  ${kc('Ø CRV',k.avgCRV!==null?fm(k.avgCRV):'–','neu')}
+</div>
+<div class="kpi-grid">
+  ${kc('Max. Gewinnserie',k.maxWinStreak,'neu')}
+  ${kc('Max. Verlustserie',k.maxLossStreak,'neu')}
+  ${kc('Max. Wintrade',k.maxWin?'+'+fm(k.maxWin)+' $':'–','pos')}
+  ${kc('Max. Kostentrade',k.maxLoss?fm(k.maxLoss)+' $':'–','neg')}
+  ${kc('Ø Wintrade',k.avgWin?'+'+fm(k.avgWin)+' $':'–','pos')}
+  ${kc('Ø Kostentrade',k.avgLoss?fm(k.avgLoss)+' $':'–','neg')}
+</div>
+<div class="chart-grid">
+  <div class="chart-card"><div class="card-title">Kontostand Verlauf</div>${none?'<div class="empty">Keine Trades</div>':'<canvas id="cLine"></canvas>'}</div>
+  <div class="chart-card"><div class="card-title">P/L pro Trade</div>${none?'<div class="empty">Keine Trades</div>':'<canvas id="cBar"></canvas>'}</div>
+</div>
+<div class="perf-section">
+  <div class="card-title" style="margin-bottom:10px">Performance Analyse</div>
+  <div class="perf-tabs">
+    ${['wochentag','session','asset','richtung','outcome','strategie','einstieg'].map(t=>`<button class="perf-tab" id="pt-${t}" onclick="showPerf('${t}')">${t.charAt(0).toUpperCase()+t.slice(1)}</button>`).join('')}
+  </div>
+  <div id="perfBody"></div>
+</div>`;
+}
+
+function initDashboard(){
+  const h=kontoHistory(db.trades,db.settings.startKontostand);
+  if(h.length){
+    setTimeout(()=>{
+      drawLine('cLine',h,db.trades.map((_,i)=>'#'+(i+1)));
+      drawBars('cBar',db.trades.map(t=>t.pl||0),db.trades.map((_,i)=>'#'+(i+1)));
+    },40);
+  }
+  showPerf('wochentag');
+}
+
+function showPerf(tab){
+  document.querySelectorAll('.perf-tab').forEach(b=>b.classList.remove('active'));
+  const el=document.getElementById('pt-'+tab); if(el) el.classList.add('active');
+  const fns={
+    wochentag:t=>wochentag(t.datum), session:t=>t.session,
+    asset:t=>t.asset, richtung:t=>t.richtung,
+    outcome:t=>t.outcome, strategie:t=>t.strategie, einstieg:t=>t.einstieg
+  };
+  let rows=perfByField(db.trades,fns[tab]);
+  if(tab==='wochentag') rows.sort((a,b)=>DAY_ORDER.indexOf(a.key)-DAY_ORDER.indexOf(b.key));
+  else rows.sort((a,b)=>b.pl-a.pl);
+  const body=document.getElementById('perfBody'); if(!body) return;
+  if(!rows.length){body.innerHTML='<div class="empty">Keine Trades</div>';return}
+  body.innerHTML=`<div class="table-wrap"><table>
+    <thead><tr><th>${tab}</th><th>Trades</th><th>Summe P/L</th><th>Summe R</th><th>Ø CRV</th><th>Winrate</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr>
+      <td>${r.key}</td><td>${r.n}</td>
+      <td class="${plClass(r.pl)}">${fmpl(r.pl)}</td>
+      <td class="${plClass(r.r)}">${(r.r>=0?'+':'')+fm(r.r)} R</td>
+      <td>${r.avgCRV!==null?fm(r.avgCRV):'–'}</td>
+      <td>${fmpct(r.winrate)}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+// ── NEUER TRADE FORM ───────────────────────────────────
+function buildForm(){
+  const s=db.settings;
+  const isEdit=editId!==null;
+  const sel=(name,id,arr)=>`<select name="${name}" id="f-${id}"><option value="">– wählen –</option>${arr.map(v=>`<option>${v}</option>`).join('')}</select>`;
+  return`<div class="flex" style="margin-bottom:16px">
+  <div class="section-title">${isEdit?'Trade bearbeiten':'Neuer Trade'}</div>
+  <div class="spacer"></div>
+  ${isEdit?`<button class="btn btn-secondary" onclick="cancelEdit()">Abbrechen</button>`:''}
+</div>
+<form id="tForm" onsubmit="submitTrade(event)">
+<div class="form-grid">
+  <div class="form-section">
+    <div class="form-section-title">Allgemein</div>
+    <div class="form-row">
+      <div class="form-group"><label>Datum *</label><input type="date" name="datum" id="f-datum" required></div>
+      <div class="form-group"><label>Session</label>${sel('session','session',s.sessions)}</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Asset</label>${sel('asset','asset',s.assets)}</div>
+      <div class="form-group"><label>Richtung</label>${sel('richtung','richtung',s.richtungen)}</div>
+    </div>
+    <div class="form-row full"><div class="form-group"><label>TV Link</label><input type="text" name="tvLink" id="f-tvLink" placeholder="https://..."></div></div>
+    <div class="form-row full"><div class="form-group"><label>Auslöser</label><textarea name="ausloser" id="f-ausloser" placeholder="Was hat den Trade ausgelöst?"></textarea></div></div>
+  </div>
+  <div class="form-section">
+    <div class="form-section-title">Trade-Daten</div>
+    <div class="form-row">
+      <div class="form-group"><label>Outcome *</label>${sel('outcome','outcome',s.outcomes).replace('<select','<select required')}</div>
+      <div class="form-group"><label>Size</label><input type="number" name="size" id="f-size" min="0" step="0.01" placeholder="1"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>P/L ($)</label><input type="number" name="pl" id="f-pl" step="0.01" placeholder="0.00" oninput="updateR()"></div>
+      <div class="form-group"><label>Risiko ($)</label><input type="number" name="risiko" id="f-risiko" min="0" step="0.01" placeholder="0.00" oninput="updateR()"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>CRV (geplant)</label><input type="number" name="crv" id="f-crv" min="0" step="0.01" placeholder="2.00"></div>
+      <div class="form-group"><label>R (berechnet)</label><input type="text" id="f-r" readonly placeholder="–"></div>
+    </div>
+    <div class="form-row full"><div class="form-group"><label>Strategie</label>${sel('strategie','strategie',s.strategien)}</div></div>
+    <div class="form-row full"><div class="form-group"><label>Einstiegselement</label>${sel('einstieg','einstieg',s.einstiegselemente)}</div></div>
+  </div>
+</div>
+<div class="form-section" style="margin-bottom:16px">
+  <div class="form-section-title">Psychologie & Reflexion</div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Bewertung (1–10)</label>
+      <div class="rating-group" id="ratingGroup">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<button type="button" class="r-btn" data-v="${n}" onclick="setRating(${n})">${n}</button>`).join('')}</div>
+      <input type="hidden" name="bewertung" id="f-bewertung">
+    </div>
+    <div class="form-group"><label>Gefühl</label>${sel('gefuehl','gefuehl',s.gefuehle)}</div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Pros</label><textarea name="pros" id="f-pros" placeholder="Was lief gut?"></textarea></div>
+    <div class="form-group"><label>Cons</label><textarea name="cons" id="f-cons" placeholder="Was lief schlecht?"></textarea></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Reflexion</label><textarea name="reflexion" id="f-reflexion"></textarea></div>
+    <div class="form-group"><label>Lerneffekt</label><textarea name="lerneffekt" id="f-lerneffekt"></textarea></div>
+  </div>
+</div>
+<div class="flex"><div class="spacer"></div>
+  <button type="submit" class="btn btn-primary" style="padding:9px 24px;font-size:14px">${isEdit?'Speichern':'Trade hinzufügen'}</button>
+</div>
+</form>`;
+}
+
+function updateR(){
+  const pl=parseFloat(document.getElementById('f-pl')?.value)||0;
+  const risk=parseFloat(document.getElementById('f-risiko')?.value)||0;
+  const el=document.getElementById('f-r');
+  if(el) el.value=risk?fm(pl/risk)+' R':'–';
+}
+
+function setRating(n){
+  document.getElementById('f-bewertung').value=n;
+  document.querySelectorAll('.r-btn').forEach(b=>b.classList.toggle('sel',+b.dataset.v===n));
+}
+
+function prefill(t){
+  if(!t) return;
+  ['datum','session','asset','richtung','tvLink','ausloser','outcome','size','pl','risiko','crv','strategie','einstieg','gefuehl','pros','cons','reflexion','lerneffekt'].forEach(f=>{
+    const el=document.getElementById('f-'+f);
+    if(el&&t[f]!=null) el.value=t[f];
+  });
+  if(t.bewertung) setRating(t.bewertung);
+  updateR();
+}
+
+async function submitTrade(e){
+  e.preventDefault();
+  const fd=new FormData(document.getElementById('tForm'));
+  const d=Object.fromEntries(fd);
+  const trade={
+    id:editId||Date.now(),
+    datum:d.datum, session:d.session||null, asset:d.asset||null,
+    richtung:d.richtung||null, tvLink:d.tvLink||null, ausloser:d.ausloser||null,
+    outcome:d.outcome, size:d.size?+d.size:null,
+    pl:d.pl?+d.pl:0, risiko:d.risiko?+d.risiko:null, crv:d.crv?+d.crv:null,
+    strategie:d.strategie||null, einstieg:d.einstieg||null,
+    bewertung:d.bewertung?+d.bewertung:null, gefuehl:d.gefuehl||null,
+    pros:d.pros||null, cons:d.cons||null,
+    reflexion:d.reflexion||null, lerneffekt:d.lerneffekt||null
+  };
+  if(editId){
+    const i=db.trades.findIndex(t=>t.id===editId);
+    if(i>=0) db.trades[i]=trade;
+  } else {
+    db.trades.push(trade);
+  }
+  db.trades.sort((a,b)=>(a.datum||'').localeCompare(b.datum||''));
+  editId=null;
+  await save(); toast('Trade gespeichert'); showView('journal');
+}
+
+function cancelEdit(){editId=null; showView('journal')}
+
+// ── BLOCK 4b: Journal + Settings (folgt) ─────────────
 </script>
 </body>
 </html>
