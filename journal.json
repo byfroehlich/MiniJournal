@@ -1,0 +1,14 @@
+{
+  "version": "1.0",
+  "settings": {
+    "startKontostand": 50000,
+    "sessions": ["Asia", "London", "NY AM", "NY PM"],
+    "assets": ["ES", "MES", "NQ", "MNQ", "CL", "MCL", "GC", "MGC", "6E", "M6E"],
+    "strategien": ["Broken Model", "Brot und Butter", "DR / IDR", "Korrelationen", "Königsweg", "Opening Range Gap", "Retirement Setup", "Smart Money", "Wochengap"],
+    "einstiegselemente": ["Algoblock", "Breaker Block", "CISDO", "Eingebundene Lücke", "Liqui-Level", "Lücke", "Mitigation Block", "VIB", "Wick"],
+    "richtungen": ["Long", "Short"],
+    "outcomes": ["Wintrade", "Kostentrade", "Breakeven", "No Trade"],
+    "gefuehle": ["Sehr gut", "Gut", "Neutral", "Schlecht", "FOMO", "Überzeugend", "Unsicher", "Diszipliniert"]
+  },
+  "trades": []
+}
