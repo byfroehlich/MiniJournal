@@ -340,7 +340,137 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelec
 
 window.addEventListener('load',renderWelcome);
 
-// ── BLOCK 3: Berechnungen + Charts (folgt) ─────────────
+// ── BLOCK 3: BERECHNUNGEN ─────────────────────────────
+const WOCHENTAGE=['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+const DAY_ORDER=['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
+
+function wochentag(d){if(!d)return'';return WOCHENTAGE[new Date(d+'T12:00:00').getDay()]}
+function calcR(pl,risk){return(risk&&risk!==0)?pl/risk:0}
+
+function kontoHistory(trades,start){
+  let k=start;
+  return trades.map(t=>{k+=(t.pl||0);return k});
+}
+
+function calcKPIs(trades,start){
+  const wins=trades.filter(t=>t.outcome==='Wintrade');
+  const losses=trades.filter(t=>t.outcome==='Kostentrade');
+  const completed=wins.length+losses.length;
+  const totalPL=trades.reduce((s,t)=>s+(t.pl||0),0);
+  const sumWins=wins.reduce((s,t)=>s+(t.pl||0),0);
+  const sumLosses=Math.abs(losses.reduce((s,t)=>s+(t.pl||0),0));
+  const crvList=trades.filter(t=>t.crv).map(t=>t.crv);
+
+  let maxWS=0,curWS=0,maxLS=0,curLS=0;
+  trades.filter(t=>t.outcome==='Wintrade'||t.outcome==='Kostentrade').forEach(t=>{
+    if(t.outcome==='Wintrade'){curWS++;curLS=0}else{curLS++;curWS=0}
+    maxWS=Math.max(maxWS,curWS); maxLS=Math.max(maxLS,curLS);
+  });
+
+  return{
+    totalPL, kontostand:start+totalPL,
+    winrate:completed?wins.length/completed*100:null,
+    profitfaktor:sumLosses>0?sumWins/sumLosses:(sumWins>0?Infinity:null),
+    totalR:trades.reduce((s,t)=>s+calcR(t.pl||0,t.risiko||0),0),
+    avgCRV:crvList.length?crvList.reduce((a,b)=>a+b)/crvList.length:null,
+    maxWinStreak:maxWS, maxLossStreak:maxLS,
+    maxWin:wins.length?Math.max(...wins.map(t=>t.pl||0)):0,
+    maxLoss:losses.length?Math.min(...losses.map(t=>t.pl||0)):0,
+    avgWin:wins.length?sumWins/wins.length:0,
+    avgLoss:losses.length?-sumLosses/losses.length:0,
+    count:trades.length
+  };
+}
+
+function perfByField(trades,fn){
+  const g={};
+  trades.forEach(t=>{
+    const k=fn(t)||'(Leer)';
+    if(!g[k])g[k]={key:k,pl:0,r:0,crvS:0,crvN:0,n:0,wins:0};
+    g[k].pl+=(t.pl||0);
+    g[k].r+=calcR(t.pl||0,t.risiko||0);
+    if(t.crv){g[k].crvS+=t.crv;g[k].crvN++}
+    g[k].n++; if(t.outcome==='Wintrade')g[k].wins++;
+  });
+  return Object.values(g).map(r=>({...r,avgCRV:r.crvN?r.crvS/r.crvN:null,winrate:r.n?r.wins/r.n*100:null}));
+}
+
+// ── FORMATIERUNG ──────────────────────────────────────
+function fm(n,d=2){if(n===null||n===undefined||isNaN(n))return'–';return n.toFixed(d).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.')}
+function fmpct(n){if(n===null||n===undefined||isNaN(n))return'–';return n.toFixed(1).replace('.',',')+' %'}
+function ocClass(o){return o==='Wintrade'?'oc-win':o==='Kostentrade'?'oc-loss':o==='Breakeven'?'oc-be':'oc-nt'}
+function plClass(v){return v>0?'pl-pos':v<0?'pl-neg':''}
+function fmpl(v){return(v>=0?'+':'')+fm(v)+' $'}
+
+// ── CHARTS (pure Canvas) ──────────────────────────────
+function drawLine(id,values,labels){
+  const c=document.getElementById(id); if(!c||!values.length)return;
+  const W=c.width=c.offsetWidth, H=c.height=190;
+  const ctx=c.getContext('2d');
+  const p={t:12,r:10,b:28,l:62};
+  const w=W-p.l-p.r, h=H-p.t-p.b;
+  ctx.clearRect(0,0,W,H);
+  const min=Math.min(...values), max=Math.max(...values);
+  const range=max-min||1;
+  const sx=i=>p.l+(i/Math.max(values.length-1,1))*w;
+  const sy=v=>p.t+h-((v-min)/range)*h;
+
+  // grid
+  for(let i=0;i<=4;i++){
+    const y=p.t+(h/4)*i;
+    ctx.strokeStyle='#2a2a3a'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(p.l,y); ctx.lineTo(W-p.r,y); ctx.stroke();
+    ctx.fillStyle='#6e6e8a'; ctx.font='10px sans-serif'; ctx.textAlign='right';
+    ctx.fillText(fm(max-(range/4)*i,0),p.l-4,y+4);
+  }
+  // fill
+  const gr=ctx.createLinearGradient(0,p.t,0,p.t+h);
+  gr.addColorStop(0,'rgba(91,127,255,.28)'); gr.addColorStop(1,'rgba(91,127,255,0)');
+  ctx.beginPath(); ctx.moveTo(sx(0),sy(values[0]));
+  values.forEach((v,i)=>ctx.lineTo(sx(i),sy(v)));
+  ctx.lineTo(sx(values.length-1),H-p.b); ctx.lineTo(sx(0),H-p.b);
+  ctx.closePath(); ctx.fillStyle=gr; ctx.fill();
+  // line
+  ctx.beginPath(); ctx.moveTo(sx(0),sy(values[0]));
+  values.forEach((v,i)=>ctx.lineTo(sx(i),sy(v)));
+  ctx.strokeStyle='#5b7fff'; ctx.lineWidth=2; ctx.stroke();
+  // x labels
+  ctx.fillStyle='#6e6e8a'; ctx.textAlign='center'; ctx.font='10px sans-serif';
+  const step=Math.max(1,Math.ceil(values.length/7));
+  for(let i=0;i<values.length;i+=step) ctx.fillText(labels[i]||'#'+(i+1),sx(i),H-8);
+}
+
+function drawBars(id,values,labels){
+  const c=document.getElementById(id); if(!c||!values.length)return;
+  const W=c.width=c.offsetWidth, H=c.height=190;
+  const ctx=c.getContext('2d');
+  const p={t:12,r:10,b:28,l:62};
+  const w=W-p.l-p.r, h=H-p.t-p.b;
+  ctx.clearRect(0,0,W,H);
+  const maxV=Math.max(...values.map(Math.abs),1);
+  const bw=Math.max(2,Math.min(18,(w/values.length)*.7));
+  const zy=p.t+h/2;
+  // grid + zero
+  ctx.strokeStyle='#2a2a3a'; ctx.lineWidth=1;
+  [0,.25,.5,.75,1].forEach(f=>{
+    const y=p.t+h*f;
+    ctx.beginPath(); ctx.moveTo(p.l,y); ctx.lineTo(W-p.r,y); ctx.stroke();
+  });
+  ctx.fillStyle='#6e6e8a'; ctx.font='10px sans-serif'; ctx.textAlign='right';
+  ctx.fillText(fm(maxV,0),p.l-4,p.t+4);
+  ctx.fillText(fm(-maxV,0),p.l-4,H-p.b+4);
+  ctx.fillText('0',p.l-4,zy+4);
+  // bars
+  values.forEach((v,i)=>{
+    const x=p.l+(i/values.length)*w+(w/values.length-bw)/2;
+    const bh=(Math.abs(v)/maxV)*(h/2);
+    const y=v>=0?zy-bh:zy;
+    ctx.fillStyle=v>=0?'#00d09e':'#ff4060';
+    ctx.fillRect(x,y,bw,bh||1);
+  });
+}
+
+// ── BLOCK 4: Views (folgt) ────────────────────────────
 </script>
 </body>
 </html>
