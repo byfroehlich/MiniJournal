@@ -3,45 +3,50 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MiniJournal</title>
+<title>Plan-B Invest Journal</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0f0f15;
-  --surface:#16161f;
-  --s2:#1e1e2a;
-  --s3:#26263a;
-  --border:#2a2a3a;
-  --text:#e4e4f0;
-  --muted:#6e6e8a;
-  --accent:#5b7fff;
-  --win:#00d09e;
-  --loss:#ff4060;
-  --warn:#ffc94d;
-  --r:8px;
+  --bg:#111824;
+  --surface:#1a2540;
+  --s2:#1f2d4d;
+  --s3:#253358;
+  --border:#2e3f62;
+  --text:#e8eaf2;
+  --muted:#7a8ab5;
+  --accent:#c9a870;
+  --accent2:#b8956a;
+  --win:#2ecc9a;
+  --loss:#e8485a;
+  --warn:#f0c060;
+  --r:6px;
 }
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.5;min-height:100vh}
-input,select,textarea,button{font-family:inherit;font-size:14px;color:var(--text)}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:14px;line-height:1.5;min-height:100vh}
+input,select,textarea,button{font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:14px;color:var(--text)}
+h1,h2,.section-title{font-family:Georgia,'Times New Roman',serif}
 a{color:var(--accent);text-decoration:none}
 
 /* Layout */
 #app{display:flex;flex-direction:column;height:100vh}
-#header{display:flex;align-items:center;gap:12px;padding:0 20px;height:54px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
-#logo{font-weight:700;font-size:17px;color:var(--text);white-space:nowrap}
+#header{display:flex;align-items:center;gap:16px;padding:0 24px;height:62px;background:var(--surface);border-bottom:2px solid var(--accent);flex-shrink:0}
+#logo{display:flex;align-items:center;gap:10px;white-space:nowrap;text-decoration:none}
+#logo-text{display:flex;flex-direction:column;line-height:1.1}
+#logo-name{font-size:15px;font-weight:700;color:var(--accent);letter-spacing:2px;font-family:Georgia,serif;text-transform:uppercase}
+#logo-sub{font-size:8px;color:var(--muted);letter-spacing:2.5px;text-transform:uppercase}
 #navTabs{display:flex;gap:2px;flex:1}
 #headerActions{display:flex;gap:8px;align-items:center}
 #fileStatus{font-size:12px;color:var(--muted);white-space:nowrap}
 #main{flex:1;overflow-y:auto;padding:20px}
 
 /* Nav tabs */
-.nav-tab{padding:6px 14px;border-radius:var(--r);background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s}
+.nav-tab{padding:6px 14px;border-radius:var(--r);background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;letter-spacing:.3px}
 .nav-tab:hover{color:var(--text);background:var(--s2)}
-.nav-tab.active{color:var(--text);background:var(--s3)}
+.nav-tab.active{color:var(--accent);background:var(--s2);border-bottom:2px solid var(--accent)}
 
 /* Buttons */
-.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:var(--r);border:none;cursor:pointer;font-weight:500;font-size:13px;transition:all .15s;white-space:nowrap}
-.btn-primary{background:var(--accent);color:#fff}
-.btn-primary:hover{opacity:.88}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:var(--r);border:none;cursor:pointer;font-weight:500;font-size:13px;transition:all .15s;white-space:nowrap;letter-spacing:.3px}
+.btn-primary{background:var(--accent);color:#111824}
+.btn-primary:hover{background:var(--accent2)}
 .btn-secondary{background:var(--s3);color:var(--text);border:1px solid var(--border)}
 .btn-secondary:hover{background:var(--border)}
 .btn-danger{background:#2a1018;color:var(--loss);border:1px solid #3a1828}
@@ -51,13 +56,13 @@ a{color:var(--accent);text-decoration:none}
 /* Cards */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px}
 .card-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:6px}
-.section-title{font-size:18px;font-weight:700;margin-bottom:16px}
+.section-title{font-size:20px;font-weight:700;margin-bottom:16px;font-family:Georgia,serif;letter-spacing:.5px;color:var(--text)}
 
 /* KPI Grid */
 .kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:12px}
 .kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px}
 .kpi-label{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:4px}
-.kpi-value{font-size:20px;font-weight:700}
+.kpi-value{font-size:20px;font-weight:700;font-family:Georgia,serif}
 .kpi-value.pos{color:var(--win)}
 .kpi-value.neg{color:var(--loss)}
 .kpi-value.neu{color:var(--text)}
@@ -71,7 +76,7 @@ canvas{display:block;width:100%}
 .perf-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px}
 .perf-tabs{display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap}
 .perf-tab{padding:4px 11px;border-radius:5px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-size:12px;font-weight:500}
-.perf-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.perf-tab.active{background:var(--accent);color:#111824;border-color:var(--accent)}
 
 /* Tables */
 .table-wrap{overflow-x:auto}
@@ -92,7 +97,7 @@ tr:hover td{background:var(--s2)}
 /* Form */
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
 .form-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px}
-.form-section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--accent);margin-bottom:14px}
+.form-section-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:2px;color:var(--accent);margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
 .form-row.full{grid-template-columns:1fr}
 .form-group{display:flex;flex-direction:column;gap:4px}
@@ -122,10 +127,13 @@ textarea{resize:vertical;min-height:68px}
 .tag-add-row input{flex:1}
 
 /* Welcome */
-#welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;height:calc(100vh - 54px);gap:14px;text-align:center}
-#welcome h2{font-size:26px;font-weight:700}
-#welcome p{color:var(--muted);max-width:380px}
-.welcome-btns{display:flex;gap:10px;margin-top:6px}
+#welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;height:calc(100vh - 62px);gap:16px;text-align:center}
+#welcome svg{opacity:.15;margin-bottom:8px}
+#welcome h2{font-size:28px;font-weight:700;font-family:Georgia,serif;color:var(--accent);letter-spacing:1px}
+#welcome h3{font-size:14px;letter-spacing:3px;text-transform:uppercase;color:var(--muted);font-weight:400;margin-top:-10px}
+#welcome p{color:var(--muted);max-width:380px;line-height:1.7}
+.welcome-btns{display:flex;gap:10px;margin-top:10px}
+.welcome-divider{width:80px;height:1px;background:var(--accent);opacity:.4}
 
 /* Modal */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;z-index:100}
@@ -165,7 +173,23 @@ textarea{resize:vertical;min-height:68px}
 <body>
 <div id="app">
   <div id="header">
-    <div id="logo">MiniJournal</div>
+    <div id="logo">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- decorative lines -->
+        <line x1="0" y1="12" x2="10" y2="12" stroke="#c9a870" stroke-width="0.8"/>
+        <line x1="22" y1="12" x2="32" y2="12" stroke="#c9a870" stroke-width="0.8"/>
+        <!-- bar chart icon -->
+        <rect x="12" y="16" width="3" height="10" fill="#c9a870"/>
+        <rect x="17" y="10" width="3" height="16" fill="#c9a870"/>
+        <!-- up arrow on tall bar -->
+        <polyline points="18.5,4 18.5,9" stroke="#c9a870" stroke-width="1.5" stroke-linecap="round"/>
+        <polyline points="16.5,6.5 18.5,4 20.5,6.5" stroke="#c9a870" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>
+      <div id="logo-text">
+        <span id="logo-name">Plan-B Invest</span>
+        <span id="logo-sub">Trading Journal</span>
+      </div>
+    </div>
     <div id="navTabs"></div>
     <div id="headerActions">
       <span id="fileStatus">Kein Journal geöffnet</span>
@@ -333,8 +357,18 @@ function renderWelcome(){
   document.getElementById('navTabs').innerHTML='';
   document.getElementById('main').innerHTML=`
     <div id="welcome">
-      <h2>MiniJournal</h2>
-      <p>Dein Trading Journal — komplett offline, kein Server, keine Cloud.</p>
+      <svg width="80" height="80" viewBox="0 0 32 32" fill="none">
+        <line x1="0" y1="12" x2="10" y2="12" stroke="#c9a870" stroke-width="0.8"/>
+        <line x1="22" y1="12" x2="32" y2="12" stroke="#c9a870" stroke-width="0.8"/>
+        <rect x="12" y="16" width="3" height="10" fill="#c9a870"/>
+        <rect x="17" y="10" width="3" height="16" fill="#c9a870"/>
+        <polyline points="18.5,4 18.5,9" stroke="#c9a870" stroke-width="1.5" stroke-linecap="round"/>
+        <polyline points="16.5,6.5 18.5,4 20.5,6.5" stroke="#c9a870" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>
+      <h2>Plan-B Invest</h2>
+      <h3>Trading Journal</h3>
+      <div class="welcome-divider"></div>
+      <p>Komplett offline · Kein Server · Keine Cloud<br>Deine Daten bleiben bei dir.</p>
       <div class="welcome-btns">
         <button class="btn btn-secondary" onclick="openJournal()">Journal öffnen</button>
         <button class="btn btn-primary" onclick="newJournal()">Neues Journal</button>
@@ -435,7 +469,7 @@ function drawLine(id,values,labels){
   }
   // fill
   const gr=ctx.createLinearGradient(0,p.t,0,p.t+h);
-  gr.addColorStop(0,'rgba(91,127,255,.28)'); gr.addColorStop(1,'rgba(91,127,255,0)');
+  gr.addColorStop(0,'rgba(201,168,112,.25)'); gr.addColorStop(1,'rgba(201,168,112,0)');
   ctx.beginPath(); ctx.moveTo(sx(0),sy(values[0]));
   values.forEach((v,i)=>ctx.lineTo(sx(i),sy(v)));
   ctx.lineTo(sx(values.length-1),H-p.b); ctx.lineTo(sx(0),H-p.b);
@@ -443,7 +477,7 @@ function drawLine(id,values,labels){
   // line
   ctx.beginPath(); ctx.moveTo(sx(0),sy(values[0]));
   values.forEach((v,i)=>ctx.lineTo(sx(i),sy(v)));
-  ctx.strokeStyle='#5b7fff'; ctx.lineWidth=2; ctx.stroke();
+  ctx.strokeStyle='#c9a870'; ctx.lineWidth=2; ctx.stroke();
   // x labels
   ctx.fillStyle='#6e6e8a'; ctx.textAlign='center'; ctx.font='10px sans-serif';
   const step=Math.max(1,Math.ceil(values.length/7));
