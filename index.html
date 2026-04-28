@@ -659,7 +659,169 @@ async function submitTrade(e){
 
 function cancelEdit(){editId=null; showView('journal')}
 
-// ── BLOCK 4b: Journal + Settings (folgt) ─────────────
+// ── JOURNAL ───────────────────────────────────────────
+function buildJournal(){
+  const s=db.settings;
+  const hist=kontoHistory(db.trades,db.settings.startKontostand);
+  let rows=db.trades.map((t,i)=>({...t,nr:i+1,_wt:wochentag(t.datum),_r:calcR(t.pl||0,t.risiko||0),_k:hist[i]}));
+  if(jFilter.outcome) rows=rows.filter(r=>r.outcome===jFilter.outcome);
+  if(jFilter.session) rows=rows.filter(r=>r.session===jFilter.session);
+  if(jFilter.asset)   rows=rows.filter(r=>r.asset===jFilter.asset);
+  if(jFilter.richtung)rows=rows.filter(r=>r.richtung===jFilter.richtung);
+  const anyFilter=Object.values(jFilter).some(v=>v);
+  const fsel=(key,label,arr)=>`<select onchange="setFilter('${key}',this.value)" style="background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text)">
+    <option value="">${label}</option>${arr.map(v=>`<option${jFilter[key]===v?' selected':''}>${v}</option>`).join('')}</select>`;
+  return`<div class="flex" style="margin-bottom:14px">
+  <div class="section-title">Journal <span class="text-muted" style="font-size:13px;font-weight:400">${db.trades.length} Trades</span></div>
+  <div class="spacer"></div>
+  <button class="btn btn-primary" onclick="newTrade()">+ Neuer Trade</button>
+</div>
+<div class="filter-bar">
+  ${fsel('outcome','Alle Outcomes',s.outcomes)}
+  ${fsel('session','Alle Sessions',s.sessions)}
+  ${fsel('asset','Alle Assets',s.assets)}
+  ${fsel('richtung','Alle Richtungen',s.richtungen)}
+  ${anyFilter?`<button class="btn btn-secondary btn-sm" onclick="clearFilters()">✕ Filter</button>`:''}
+</div>
+${rows.length===0?'<div class="empty">Keine Trades gefunden</div>':`
+<div class="table-wrap"><table>
+<thead><tr>
+  <th>Nr</th><th>Datum</th><th>Tag</th><th>Outcome</th><th>Session</th>
+  <th>Asset</th><th>Richtung</th><th>Size</th><th>P/L</th><th>Risiko</th>
+  <th>CRV</th><th>R</th><th>Kontostand</th><th>Strategie</th><th>Einstieg</th>
+  <th>Bew.</th><th>Gefühl</th><th></th>
+</tr></thead>
+<tbody>${rows.map(t=>`<tr>
+  <td>${t.nr}</td>
+  <td>${t.datum||'–'}</td>
+  <td class="text-muted">${t._wt}</td>
+  <td><span class="${ocClass(t.outcome)}">${t.outcome||'–'}</span></td>
+  <td>${t.session||'–'}</td><td>${t.asset||'–'}</td><td>${t.richtung||'–'}</td>
+  <td>${t.size!=null?t.size:'–'}</td>
+  <td class="${plClass(t.pl)}">${fmpl(t.pl)}</td>
+  <td>${t.risiko!=null?fm(t.risiko)+' $':'–'}</td>
+  <td>${t.crv!=null?fm(t.crv):'–'}</td>
+  <td class="${plClass(t._r)}">${fm(t._r)} R</td>
+  <td class="${plClass(t._k-db.settings.startKontostand)}">${fm(t._k)} $</td>
+  <td>${t.strategie||'–'}</td><td>${t.einstieg||'–'}</td>
+  <td>${t.bewertung?t.bewertung+'/10':'–'}</td>
+  <td>${t.gefuehl||'–'}</td>
+  <td><div class="flex">
+    <button class="btn btn-secondary btn-sm" onclick="viewTrade(${t.id})" title="Details">👁</button>
+    <button class="btn btn-secondary btn-sm" onclick="editTrade(${t.id})" title="Bearbeiten">✏️</button>
+    <button class="btn btn-danger btn-sm" onclick="delTrade(${t.id})" title="Löschen">🗑</button>
+  </div></td>
+</tr>`).join('')}</tbody>
+</table></div>`}`;
+}
+
+function setFilter(k,v){jFilter[k]=v;showView('journal')}
+function clearFilters(){jFilter={outcome:'',session:'',asset:'',richtung:''};showView('journal')}
+function newTrade(){editId=null;showView('trade')}
+function editTrade(id){editId=id;showView('trade')}
+async function delTrade(id){
+  showConfirm('Trade löschen','Diesen Trade wirklich löschen? Nicht rückgängig machbar.',async()=>{
+    db.trades=db.trades.filter(t=>t.id!==id);
+    await save(); toast('Trade gelöscht'); showView('journal');
+  });
+}
+
+function viewTrade(id){
+  const t=db.trades.find(t=>t.id===id); if(!t) return;
+  const idx=db.trades.indexOf(t);
+  const hist=kontoHistory(db.trades,db.settings.startKontostand);
+  const r=calcR(t.pl||0,t.risiko||0);
+  const row=(l,v)=>`<div><div class="card-title" style="margin-bottom:2px">${l}</div><div>${v}</div></div>`;
+  document.getElementById('detailModal').innerHTML=`
+    <div class="flex" style="margin-bottom:16px">
+      <div class="modal-title">#${idx+1} — ${t.datum||'–'} (${wochentag(t.datum)})</div>
+      <div class="spacer"></div>
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('detailOverlay').classList.remove('open')">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      ${row('Outcome',`<span class="${ocClass(t.outcome)}">${t.outcome||'–'}</span>`)}
+      ${row('P/L',`<span class="${plClass(t.pl)}">${fmpl(t.pl)}</span>`)}
+      ${row('Session',t.session||'–')} ${row('Asset',t.asset||'–')}
+      ${row('Richtung',t.richtung||'–')} ${row('Size',t.size!=null?t.size:'–')}
+      ${row('Risiko',t.risiko!=null?fm(t.risiko)+' $':'–')}
+      ${row('CRV (geplant)',t.crv!=null?fm(t.crv):'–')}
+      ${row('R (tatsächlich)',`<span class="${plClass(r)}">${fm(r)} R</span>`)}
+      ${row('Kontostand',fm(hist[idx])+' $')}
+      ${row('Strategie',t.strategie||'–')} ${row('Einstieg',t.einstieg||'–')}
+      ${row('Bewertung',t.bewertung?t.bewertung+'/10':'–')} ${row('Gefühl',t.gefuehl||'–')}
+    </div>
+    ${t.tvLink?`<div style="margin-bottom:10px"><a href="${t.tvLink}" target="_blank">TradingView öffnen ↗</a></div>`:''}
+    ${t.ausloser?`<div style="margin-bottom:10px"><strong>Auslöser:</strong><div class="text-muted" style="margin-top:3px">${t.ausloser}</div></div>`:''}
+    ${t.pros?`<div style="margin-bottom:10px"><strong class="text-win">Pros:</strong><div class="text-muted" style="margin-top:3px">${t.pros}</div></div>`:''}
+    ${t.cons?`<div style="margin-bottom:10px"><strong class="text-loss">Cons:</strong><div class="text-muted" style="margin-top:3px">${t.cons}</div></div>`:''}
+    ${t.reflexion?`<div style="margin-bottom:10px"><strong>Reflexion:</strong><div class="text-muted" style="margin-top:3px">${t.reflexion}</div></div>`:''}
+    ${t.lerneffekt?`<div style="margin-bottom:10px"><strong>Lerneffekt:</strong><div class="text-muted" style="margin-top:3px">${t.lerneffekt}</div></div>`:''}
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('detailOverlay').classList.remove('open')">Schließen</button>
+      <button class="btn btn-primary" onclick="document.getElementById('detailOverlay').classList.remove('open');editTrade(${t.id})">Bearbeiten</button>
+    </div>`;
+  document.getElementById('detailOverlay').classList.add('open');
+}
+
+// ── EINSTELLUNGEN ─────────────────────────────────────
+function buildSettings(){
+  const s=db.settings;
+  const listEd=(id,label)=>`<div class="form-section">
+    <div class="form-section-title">${label}</div>
+    <div class="tag-list">${(s[id]||[]).map((v,i)=>`<span class="tag">${v}<button type="button" class="tag-del" onclick="removeTag('${id}',${i})">×</button></span>`).join('')}</div>
+    <div class="tag-add-row">
+      <input type="text" id="ti-${id}" placeholder="Neuer Eintrag …" onkeydown="if(event.key==='Enter'){event.preventDefault();addTag('${id}')}">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="addTag('${id}')">+</button>
+    </div>
+  </div>`;
+  return`<div class="section-title" style="margin-bottom:16px">Einstellungen</div>
+<div class="form-section" style="margin-bottom:14px">
+  <div class="form-section-title">Grundeinstellungen</div>
+  <div style="display:flex;align-items:flex-end;gap:10px;max-width:320px">
+    <div class="form-group" style="flex:1"><label>Start-Kontostand ($)</label><input type="number" id="s-start" value="${s.startKontostand}" step="100"></div>
+    <button class="btn btn-primary btn-sm" onclick="saveStart()">Speichern</button>
+  </div>
+</div>
+<div class="settings-grid">
+  ${listEd('sessions','Sessions')}
+  ${listEd('assets','Assets')}
+  ${listEd('strategien','Strategien')}
+  ${listEd('einstiegselemente','Einstiegselemente')}
+  ${listEd('richtungen','Richtungen')}
+  ${listEd('outcomes','Outcomes')}
+  ${listEd('gefuehle','Gefühle')}
+</div>
+<div class="divider"></div>
+<div class="form-section">
+  <div class="form-section-title">Datenverwaltung</div>
+  <div class="flex" style="flex-wrap:wrap;gap:8px">
+    <button class="btn btn-secondary" onclick="exportDB()">Export JSON</button>
+    <button class="btn btn-secondary" onclick="importDB()">Import JSON</button>
+    <button class="btn btn-danger" onclick="showConfirm('Alle Trades löschen','Wirklich ALLE ${db.trades.length} Trades löschen? Nicht rückgängig!',resetTrades)">Alle Trades löschen</button>
+  </div>
+  <div style="margin-top:10px;font-size:12px;color:var(--muted)">${db.trades.length} Trades · ${fileHandle?fileHandle.name:'unbekannte Datei'}</div>
+</div>`;
+}
+
+async function saveStart(){
+  const v=parseFloat(document.getElementById('s-start')?.value);
+  if(!isNaN(v)){db.settings.startKontostand=v;await save();toast('Gespeichert')}
+}
+async function addTag(id){
+  const inp=document.getElementById('ti-'+id);
+  const v=inp.value.trim(); if(!v) return;
+  if(!db.settings[id]) db.settings[id]=[];
+  db.settings[id].push(v); inp.value='';
+  await save(); showView('settings');
+}
+async function removeTag(id,i){
+  db.settings[id].splice(i,1);
+  await save(); showView('settings');
+}
+async function resetTrades(){
+  db.trades=[];
+  await save(); toast('Alle Trades gelöscht'); showView('dashboard'); updateUI();
+}
 </script>
 </body>
 </html>
